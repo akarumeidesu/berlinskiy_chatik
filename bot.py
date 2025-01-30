@@ -2,7 +2,7 @@ import logging
 import os
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Загрузка переменных окружения из .env
 load_dotenv()
@@ -14,38 +14,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Максимальное количество сообщений для хранения
-MAX_MESSAGES = 5
-
-# Хранилище сообщений
-messages_store = []
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет приветственное сообщение."""
     await update.message.reply_text("Привет! Я бот, который собирает последние 5 сообщений.")
 
 async def get_last_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Читает последние 5 сообщений, склеивает их и отправляет в чат."""
-    if not messages_store:
-        await update.message.reply_text("Нет сохраненных сообщений.")
-        return
-    
-    # Склеиваем сообщения через перенос строки
-    response = "\n".join([f"{msg['from_user']}: {msg['text']}" for msg in messages_store])
-    await update.message.reply_text(response or "Нет сохраненных сообщений.")
+    """Читает последние 5 сообщений из чата и отправляет их в ответ."""
+    chat_id = update.message.chat_id
 
-async def save_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Сохраняет сообщение в хранилище."""
-    message = update.message
-    if message.text:
-        messages_store.append({
-            'from_user': message.from_user.username or message.from_user.first_name,
-            'text': message.text
-        })
-        
-        # Ограничение количества сообщений до MAX_MESSAGES
-        if len(messages_store) > MAX_MESSAGES:
-            messages_store.pop(0)
+    try:
+        # Получаем последние 5 сообщений из чата
+        messages = await context.bot.get_chat_history(chat_id=chat_id, limit=5)
+
+        # Собираем текст сообщений
+        response = "\n".join([
+            f"{msg.from_user.username or msg.from_user.first_name}: {msg.text}"
+            for msg in reversed(messages) if msg.text  # Игнорируем сообщения без текста
+        ])
+
+        # Отправляем собранный текст в чат
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("Нет текстовых сообщений для отображения.")
+    except Exception as e:
+        logger.error(f"Ошибка при получении истории сообщений: {e}")
+        await update.message.reply_text("Не удалось получить последние сообщения.")
 
 def main() -> None:
     """Запуск бота."""
@@ -60,9 +54,6 @@ def main() -> None:
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("get_last_messages", get_last_messages))
-
-    # Регистрация обработчика всех текстовых сообщений
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_message))
 
     # Запуск бота через длинные опросы
     application.run_polling()
