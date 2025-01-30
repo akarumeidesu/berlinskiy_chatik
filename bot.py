@@ -1,6 +1,6 @@
 import logging
 import os
-from dotenv import load_dotenv  # Для загрузки переменных из .env
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -25,11 +25,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Привет! Я бот, который собирает последние 5 сообщений.")
 
 async def get_last_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отправляет последние 5 сообщений."""
+    """Читает последние 5 сообщений, склеивает их и отправляет в чат."""
     if not messages_store:
         await update.message.reply_text("Нет сохраненных сообщений.")
         return
     
+    # Склеиваем сообщения через перенос строки
     response = "\n".join([f"{msg['from_user']}: {msg['text']}" for msg in messages_store])
     await update.message.reply_text(response or "Нет сохраненных сообщений.")
 
@@ -58,7 +59,7 @@ def main() -> None:
 
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("lastmessages", get_last_messages))
+    application.add_handler(CommandHandler("get_last_messages", get_last_messages))
 
     # Регистрация обработчика всех текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_message))
